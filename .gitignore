@@ -49,5 +49,8 @@ Thumbs.db
 
 # Logs
 *.log
+logs/
+backend/logs/
 
 backend/alembic/script.py.mako
+.claude/mcp.json

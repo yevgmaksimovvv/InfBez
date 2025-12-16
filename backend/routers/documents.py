@@ -1,138 +1,122 @@
 """
-Documents router - экспорт в PDF с ЭЦП
+Роутер документов
+Тонкий слой HTTP эндпоинтов, бизнес-логика в DocumentService
 """
 from fastapi import APIRouter, Depends, HTTPException
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
-from pydantic import BaseModel
-from backend.database import get_db
-from backend.auth_utils import get_current_user
-from backend.models import Document, User
-from reportlab.lib.pagesizes import letter
-from reportlab.pdfgen import canvas
-from io import BytesIO
-import hashlib
+import logging
+
+from backend.core.database import get_db
+from backend.dependencies import get_current_user
+from backend.models import User
+from backend.schemas import CreateDocumentRequest
+from backend.services import DocumentService
 
 router = APIRouter()
-security = HTTPBearer()
-
-
-class CreateDocumentRequest(BaseModel):
-    original_text: str
-    encrypted_text: str = None
-    algorithm: str = None
+logger = logging.getLogger(__name__)
 
 
 @router.post("/create")
 async def create_document(
     request: CreateDocumentRequest,
-    credentials: HTTPAuthorizationCredentials = Depends(security),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Создание документа"""
-    user = get_current_user(credentials.credentials, db)
-    
-    doc = Document(
-        user_id=user.id,
-        original_text=request.original_text,
-        encrypted_text=request.encrypted_text,
-        algorithm=request.algorithm
-    )
-    db.add(doc)
-    db.commit()
-    db.refresh(doc)
-    
-    return {"id": doc.id, "message": "Document created"}
+    try:
+        doc_service = DocumentService()
+        doc = doc_service.create_document(
+            user_id=current_user.id,
+            original_text=request.original_text,
+            encrypted_text=request.encrypted_text,
+            algorithm=request.algorithm,
+            db=db
+        )
+
+        return {"id": doc.id, "message": "Document created"}
+
+    except Exception as e:
+        logger.error(f"Error creating document: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to create document")
 
 
 @router.get("/{document_id}/pdf")
 async def export_to_pdf(
     document_id: int,
-    credentials: HTTPAuthorizationCredentials = Depends(security),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Экспорт документа в PDF с ЭЦП"""
-    user = get_current_user(credentials.credentials, db)
-    doc = db.query(Document).filter(Document.id == document_id).first()
-    
-    if not doc:
-        raise HTTPException(status_code=404, detail="Document not found")
-    
-    if doc.user_id != user.id and user.role != "admin":
-        raise HTTPException(status_code=403, detail="Not enough permissions")
-    
-    # Создаем PDF
-    buffer = BytesIO()
-    c = canvas.Canvas(buffer, pagesize=letter)
-    width, height = letter
-    
-    # Заголовок
-    c.setFont("Helvetica-Bold", 16)
-    c.drawString(50, height - 50, "CyberSecurity Document")
-    
-    # Оригинальный текст
-    c.setFont("Helvetica", 12)
-    y = height - 100
-    c.drawString(50, y, "Original Text:")
-    y -= 20
-    
-    # Разбиваем текст на строки
-    text_lines = []
-    words = doc.original_text.split()
-    line = ""
-    for word in words:
-        if len(line + word) < 80:
-            line += word + " "
-        else:
-            text_lines.append(line)
-            line = word + " "
-    if line:
-        text_lines.append(line)
-    
-    for line in text_lines[:30]:  # Ограничиваем количество строк
-        c.drawString(50, y, line)
-        y -= 15
-        if y < 100:
-            c.showPage()
-            y = height - 50
-    
-    # Зашифрованный текст (если есть)
-    if doc.encrypted_text:
-        y -= 30
-        c.setFont("Helvetica-Bold", 12)
-        c.drawString(50, y, "Encrypted Text:")
-        y -= 20
-        c.setFont("Helvetica", 10)
-        encrypted_lines = [doc.encrypted_text[i:i+80] for i in range(0, len(doc.encrypted_text), 80)]
-        for line in encrypted_lines[:20]:
-            c.drawString(50, y, line)
-            y -= 15
-            if y < 100:
-                c.showPage()
-                y = height - 50
-    
-    # Электронная подпись
-    y -= 30
-    c.setFont("Helvetica-Bold", 12)
-    c.drawString(50, y, "Digital Signature:")
-    y -= 20
-    c.setFont("Helvetica", 10)
-    
-    # Создаем подпись (хеш документа)
-    doc_hash = hashlib.sha256(f"{doc.id}{doc.original_text}{doc.created_at}".encode()).hexdigest()
-    c.drawString(50, y, f"Hash: {doc_hash}")
-    y -= 15
-    c.drawString(50, y, f"Signed by: {user.username}")
-    y -= 15
-    c.drawString(50, y, f"Date: {doc.created_at}")
-    
-    c.save()
-    buffer.seek(0)
-    
-    return Response(
-        content=buffer.read(),
-        media_type="application/pdf",
-        headers={"Content-Disposition": f"attachment; filename=document_{document_id}.pdf"}
-    )
+    """Экспорт документа в PDF с цифровой подписью"""
+    try:
+        doc_service = DocumentService()
 
+        # Получение документа из базы данных
+        doc = doc_service.get_document(document_id, db)
+
+        # Проверка прав доступа пользователя к документу
+        doc_service.check_access(doc, current_user)
+
+        # Генерация документа в формате PDF
+        pdf_content = doc_service.generate_pdf(doc, current_user)
+
+        logger.info(f"PDF generated for document {document_id} by user {current_user.username}")
+
+        return Response(
+            content=pdf_content,
+            media_type="application/pdf",
+            headers={"Content-Disposition": f"attachment; filename=document_{document_id}.pdf"}
+        )
+
+    except ValueError as e:
+        raise HTTPException(status_code=404 if "not found" in str(e).lower() else 403, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error exporting PDF: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to export PDF")
+
+
+@router.get("/")
+async def list_documents(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Получение списка документов пользователя"""
+    try:
+        doc_service = DocumentService()
+        documents = doc_service.list_documents(current_user, db)
+
+        return {
+            "documents": [
+                {
+                    "id": d.id,
+                    "algorithm": d.algorithm,
+                    "created_at": d.created_at.isoformat(),
+                    "user_id": d.user_id
+                }
+                for d in documents
+            ]
+        }
+
+    except Exception as e:
+        logger.error(f"Error listing documents: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to list documents")
+
+
+@router.delete("/{document_id}")
+async def delete_document(
+    document_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Удаление документа"""
+    try:
+        doc_service = DocumentService()
+        doc_service.delete_document(document_id, current_user, db)
+
+        return {"message": "Document deleted successfully"}
+
+    except ValueError as e:
+        raise HTTPException(status_code=404 if "not found" in str(e).lower() else 403, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error deleting document: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to delete document")

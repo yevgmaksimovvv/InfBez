@@ -21,12 +21,12 @@ function Login() {
       navigate('/dashboard');
     } catch (err) {
       if (err.response?.status === 401 && !showOtp) {
-        // Требуется OTP
+        // Требуется одноразовый пароль для завершения аутентификации
         setShowOtp(true);
         try {
           await api.post('/api/auth/send-otp');
         } catch (otpErr) {
-          setError('Ошибка отправки OTP');
+          setError('Ошибка отправки одноразового пароля');
         }
       } else {
         setError(err.response?.data?.detail || 'Ошибка входа');
@@ -71,7 +71,7 @@ function Login() {
           {showOtp && (
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                OTP код (отправлен на email)
+                Одноразовый пароль (отправлен на электронную почту)
               </label>
               <input
                 type="text"

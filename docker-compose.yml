@@ -15,7 +15,82 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - cybersecurity_network
+
+  redis:
+    image: redis:7-alpine
+    container_name: cybersecurity_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - cybersecurity_network
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: cybersecurity_backend
+    environment:
+      # ВАЖНО: Установите эти переменные через .env файл!
+      # НЕ используйте дефолтные значения в production!
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/cybersecurity
+      - REDIS_URL=redis://redis:6379/0
+      - REDIS_ENABLED=${REDIS_ENABLED:-true}
+      - SECRET_KEY=${SECRET_KEY:?SECRET_KEY is required}
+      - MASTER_KEY=${MASTER_KEY:?MASTER_KEY is required}
+      - ALGORITHM=${ALGORITHM:-HS256}
+      - ACCESS_TOKEN_EXPIRE_MINUTES=${ACCESS_TOKEN_EXPIRE_MINUTES:-30}
+      - OTP_EXPIRE_MINUTES=${OTP_EXPIRE_MINUTES:-5}
+      - SMTP_HOST=${SMTP_HOST:-}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_USER=${SMTP_USER:-}
+      - SMTP_PASSWORD=${SMTP_PASSWORD:-}
+      - RATE_LIMIT_ENABLED=${RATE_LIMIT_ENABLED:-true}
+      - RATE_LIMIT_PER_MINUTE=${RATE_LIMIT_PER_MINUTE:-60}
+      - RATE_LIMIT_PER_HOUR=${RATE_LIMIT_PER_HOUR:-1000}
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000,http://localhost:5173}
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./backend:/app/backend
+      - ./algorithms:/app/algorithms
+      - backend_logs:/app/backend/logs
+    networks:
+      - cybersecurity_network
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: frontend
+      dockerfile: Dockerfile
+    container_name: cybersecurity_frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    networks:
+      - cybersecurity_network
+    restart: unless-stopped
 
 volumes:
   postgres_data:
+  redis_data:
+  backend_logs:
 
+networks:
+  cybersecurity_network:
+    driver: bridge
