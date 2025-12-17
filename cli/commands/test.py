@@ -245,8 +245,9 @@ def benchmark_kuznechik(sizes: List[int], iterations: int, show_progress: bool) 
         times = []
 
         for _ in range(iterations):
-            # Создание нового шифра для каждой итерации
-            cipher = Kuznechik()
+            # Создание нового шифра с ключом для каждой итерации
+            key = os.urandom(32)  # 256-bit key
+            cipher = Kuznechik(key)
 
             start = time.perf_counter()
             # Шифрование блоками

@@ -89,9 +89,9 @@ def encrypt(
             # Валидация размера (max 1MB для Кузнечик)
             validate_data_size(data, 1024 * 1024, "Кузнечик")
 
-            # Генерация ключа и шифрование
-            cipher = Kuznechik()
+            # Генерация ключа и создание шифра
             key = os.urandom(32)  # 256-bit key
+            cipher = Kuznechik(key)
 
             # PKCS#7 padding
             block_size = 16
@@ -102,7 +102,7 @@ def encrypt(
             encrypted_blocks = []
             for i in range(0, len(padded_data), block_size):
                 block = padded_data[i:i + block_size]
-                encrypted_block = cipher.encrypt(block, key)
+                encrypted_block = cipher.encrypt(block)
                 encrypted_blocks.append(encrypted_block)
 
             encrypted_data = b''.join(encrypted_blocks)
@@ -231,14 +231,14 @@ def decrypt(
                 key_data = load_json_file(key_file)
                 key = decode_data(key_data['key'], key_data.get('encoding', 'base64'))
 
-            # Расшифрование
-            cipher = Kuznechik()
+            # Расшифрование с ключом
+            cipher = Kuznechik(key)
             block_size = 16
 
             decrypted_blocks = []
             for i in range(0, len(encrypted_bytes), block_size):
                 block = encrypted_bytes[i:i + block_size]
-                decrypted_block = cipher.decrypt(block, key)
+                decrypted_block = cipher.decrypt(block)
                 decrypted_blocks.append(decrypted_block)
 
             decrypted_data = b''.join(decrypted_blocks)
