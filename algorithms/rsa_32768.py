@@ -342,9 +342,34 @@ def generate_prime_pair_parallel(
 class RSA32768:
     """Реализация RSA-32768 с поддержкой сохранения/загрузки ключей"""
 
-    def __init__(self, keypair: Optional[RSAKeyPair] = None):
+    def __init__(self, keypair: Optional[RSAKeyPair] = None, public_key: Optional[Dict] = None, private_key: Optional[Dict] = None):
+        """
+        Инициализация RSA32768
+
+        Args:
+            keypair: Полный объект RSAKeyPair
+            public_key: Словарь с 'n' и 'e' (для шифрования)
+            private_key: Словарь с 'd', 'p', 'q' (для расшифрования)
+        """
         if keypair:
             self.keypair = keypair
+        elif public_key or private_key:
+            # Создание минимального keypair для совместимости
+            @dataclass
+            class MinimalKeyPair:
+                n: mpz
+                e: mpz
+                d: Optional[mpz] = None
+                p: Optional[mpz] = None
+                q: Optional[mpz] = None
+
+            n = mpz(public_key['n']) if public_key else None
+            e = mpz(public_key['e']) if public_key else None
+            d = mpz(private_key['d']) if private_key and 'd' in private_key else None
+            p = mpz(private_key['p']) if private_key and 'p' in private_key else None
+            q = mpz(private_key['q']) if private_key and 'q' in private_key else None
+
+            self.keypair = MinimalKeyPair(n=n, e=e, d=d, p=p, q=q)
         else:
             raise ValueError(
                 "RSA32768 требует явной передачи ключей. "
