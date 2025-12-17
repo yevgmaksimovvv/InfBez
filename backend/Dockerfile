@@ -10,15 +10,15 @@ RUN apt-get update && apt-get install -y \
 # Создание рабочей директории
 WORKDIR /app
 
-# Копирование requirements и установка зависимостей
+# Копирование requirements из корня проекта и установка зависимостей
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Копирование кода backend
-COPY . /app/backend/
+# Копирование алгоритмов
+COPY algorithms /app/algorithms/
 
-# Копирование алгоритмов (они находятся в родительской директории)
-COPY ../algorithms /app/algorithms/
+# Копирование кода backend
+COPY backend /app/backend/
 
 # Создание директории для логов
 RUN mkdir -p /app/backend/logs

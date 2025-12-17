@@ -66,8 +66,10 @@ services:
       redis:
         condition: service_healthy
     volumes:
-      - ./backend:/app/backend
-      - ./algorithms:/app/algorithms
+      # Монтирование кода для разработки (hot reload)
+      - ./backend:/app/backend:ro
+      - ./algorithms:/app/algorithms:ro
+      # Монтирование логов
       - backend_logs:/app/backend/logs
     networks:
       - cybersecurity_network

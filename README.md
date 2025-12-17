@@ -1,15 +1,22 @@
 # InfBez - Криптографическое веб-приложение
 
-Веб-приложение для криптографических операций с ГОСТ алгоритмами и тройной аутентификацией.
-
+Веб-приложение для криптографических операций с ГОСТ алгоритмами и многофакторной аутентификацией.
 
 ## Возможности
 
 - **Шифрование**: RSA-32768, Кузнечик (ГОСТ Р 34.12-2018)
 - **Хеширование**: Стрибог-512 (ГОСТ 34.11-2018)
 - **Аутентификация**: Пароль + OAuth (Google/Yandex) + Email OTP
+- **Интерфейсы**: Web UI + CLI
 - **Безопасность**: Rate limiting, шифрование ключей, валидация данных
 - **Роли**: Гость, Пользователь, Администратор
+
+## Технологии
+
+- **Backend**: FastAPI, Python 3.10+, PostgreSQL, SQLAlchemy
+- **Frontend**: React 18, Vite, Tailwind CSS
+- **Криптография**: RSA-32768 (GMP), Кузнечик, Стрибог-512
+- **Инфраструктура**: Docker, Nginx
 
 ## Быстрый старт
 
@@ -30,28 +37,35 @@ brew install gmp
 sudo apt-get install libgmp-dev
 ```
 
-### Запуск
+### Запуск через Docker (рекомендуется)
+
+```bash
+# Запуск всех сервисов
+docker-compose up --build
+```
+
+Приложение доступно:
+
+- Frontend: <http://localhost:80>
+- Backend API: <http://localhost:8000>
+- API Docs: <http://localhost:8000/docs>
+
+### Локальный запуск
 
 ```bash
 # 1. Запустить PostgreSQL
 docker-compose up -d postgres
 
-# 2. Создать таблицы БД
+# 2. Настроить backend
 cd backend
+cp ../.env.example .env
+# Отредактируйте .env файл
+
+# 3. Создать таблицы БД
 python migration_helper.py
 
-# 3. Создать .env файл
-cat > .env << 'EOF'
-DATABASE_URL=postgresql://postgres:postgres@localhost:5432/cybersecurity
-SECRET_KEY=your-secret-key-change-this
-MASTER_KEY=your-master-key-for-encryption
-ALGORITHM=HS256
-ACCESS_TOKEN_EXPIRE_MINUTES=30
-OTP_EXPIRE_MINUTES=5
-EOF
-
 # 4. Установить зависимости и запустить backend
-pip install -r requirements.txt
+pip install -r ../requirements.txt  # Используем централизованный файл
 uvicorn main:app --reload
 
 # 5. Установить и запустить frontend
@@ -61,29 +75,17 @@ npm run dev
 ```
 
 Приложение доступно:
-- Frontend: http://localhost:5173
-- Backend API: http://localhost:8000
-- API Docs: http://localhost:8000/docs
 
-### Запуск через Docker
-
-```bash
-docker-compose up --build
-```
-
-Приложение доступно:
-- Frontend: http://localhost:80
-- Backend: http://localhost:8000
+- Frontend: <http://localhost:5173>
+- Backend API: <http://localhost:8000>
+- API Docs: <http://localhost:8000/docs>
 
 ## Структура проекта
 
-```
+```text
 InfBez/
 ├── backend/              # FastAPI backend
-│   ├── core/            # Ядро приложения
-│   │   ├── database.py          # База данных
-│   │   ├── encryption.py        # Шифрование ключей
-│   │   └── security/            # Модули безопасности
+│   ├── core/            # Ядро (database, encryption, security)
 │   ├── models/          # ORM модели (User, RSAKeyPair, Document)
 │   ├── schemas/         # Pydantic схемы валидации
 │   ├── services/        # Бизнес-логика (Auth, Crypto, Document)
@@ -97,13 +99,136 @@ InfBez/
 │   │   └── services/    # API клиент
 │   └── nginx.conf       # Nginx конфиг
 ├── algorithms/          # ГОСТ алгоритмы
-│   ├── kuznechik/      # Кузнечик
-│   ├── streebog/       # Стрибог
-│   └── rsa_32768.py    # RSA-32768
+│   ├── kuznechik/      # Кузнечик (ГОСТ Р 34.12-2018)
+│   ├── streebog/       # Стрибог-512 (ГОСТ 34.11-2018)
+│   └── rsa_32768.py    # RSA-32768 (GMP)
+├── cli/                 # Интерфейс командной строки
+│   ├── main.py         # Точка входа CLI
+│   ├── utils.py        # Утилиты (Rich, форматирование)
+│   └── commands/       # Команды (crypto, keys, test, server)
+├── requirements.txt     # Централизованные зависимости
+├── requirements-dev.txt # Зависимости для разработки
+├── setup.py            # Установка CLI пакета
 └── docker-compose.yml   # Docker конфигурация
 ```
 
-Подробное описание архитектуры смотри в [ARCHITECTURE.md](ARCHITECTURE.md).
+Подробное описание архитектуры: [ARCHITECTURE.md](ARCHITECTURE.md)
+
+## Управление зависимостями
+
+Все зависимости централизованы в корне проекта:
+
+- **requirements.txt** - основные зависимости (backend, алгоритмы, CLI)
+- **requirements-dev.txt** - дополнительные инструменты для разработки (pytest, black, flake8)
+- **setup.py** - установка CLI пакета
+
+### Установка
+
+```bash
+# Production
+pip install -r requirements.txt
+
+# Development (включает production)
+pip install -r requirements-dev.txt
+
+# CLI пакет
+pip install -e .              # базовая установка
+pip install -e ".[dev]"       # с dev инструментами
+```
+
+### Добавление зависимостей
+
+1. Добавьте пакет в `requirements.txt` (или `requirements-dev.txt` для dev-инструментов)
+2. Укажите версию: `==` для точной, `>=` для минимальной
+3. Добавьте комментарий с назначением пакета
+4. Пересоберите Docker: `docker-compose build backend`
+
+## CLI - Интерфейс командной строки
+
+### Установка CLI
+
+```bash
+# Dev режим (рекомендуется)
+pip install -e .
+
+# Проверка установки
+infbez --version
+```
+
+### Основные команды
+
+```bash
+# Помощь
+infbez --help
+
+# Шифрование Кузнечик
+infbez crypto encrypt "Секретное сообщение" -a kuznechik
+
+# Хеширование файла
+infbez crypto hash document.pdf -f
+
+# Бенчмарк алгоритмов
+infbez test benchmark --progress
+
+# Запуск сервера
+infbez server start --reload
+```
+
+### Команды CLI
+
+#### crypto - Криптографические операции
+
+- `encrypt` - Шифрование (Кузнечик, RSA)
+- `decrypt` - Расшифрование
+- `hash` - Хеширование (Стрибог-512)
+
+#### keys - Управление RSA ключами
+
+- `generate` - Генерация RSA-32768 ключей
+- `list` - Список ключей
+- `export` - Экспорт публичного ключа
+- `import` - Импорт ключа
+
+#### test - Тестирование и бенчмарки
+
+- `benchmark` - Комплексный бенчмарк
+- `streebog` - Тест Стрибог
+- `kuznechik` - Тест Кузнечик
+- `rsa` - Тест RSA
+
+#### server - Управление backend
+
+- `start` - Запуск сервера
+- `init` - Инициализация БД
+- `config` - Показать конфигурацию
+
+### Примеры использования
+
+#### Быстрое шифрование
+
+```bash
+# Шифрование
+infbez crypto encrypt "Секретное сообщение" -a kuznechik -o msg.json
+
+# Расшифрование
+infbez crypto decrypt msg.json -a kuznechik -k msg.json -f
+```
+
+#### Проверка целостности файла
+
+```bash
+# Создание хеша
+infbez crypto hash important.pdf -f > hash.txt
+
+# Проверка
+infbez crypto hash important.pdf -f --verify "$(cat hash.txt)"
+```
+
+#### Бенчмарк алгоритмов
+
+```bash
+infbez test benchmark -s 1024 -i 100 -o results.json
+```
 
 ## API примеры
 
@@ -139,28 +264,6 @@ curl -X POST http://localhost:8000/api/crypto/encrypt \
   }'
 ```
 
-Ответ:
-```json
-{
-  "encrypted": "9f8e7d6c...",
-  "key_id": "550e8400-e29b-41d4-a716-446655440000",
-  "algorithm": "rsa"
-}
-```
-
-### Расшифрование (RSA)
-
-```bash
-curl -X POST http://localhost:8000/api/crypto/decrypt \
-  -H "Authorization: Bearer YOUR_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "encrypted_data": "9f8e7d6c...",
-    "algorithm": "rsa",
-    "key_id": "550e8400-e29b-41d4-a716-446655440000"
-  }'
-```
-
 ### Хеширование (Стрибог)
 
 ```bash
@@ -172,14 +275,14 @@ curl -X POST http://localhost:8000/api/crypto/hash \
 
 ## Безопасность
 
-### Реализовано
+### Реализованные меры
 
-- Приватные RSA ключи шифруются мастер-ключом и не передаются клиенту
+- Приватные RSA ключи шифруются мастер-ключом
 - OTP коды хешируются перед сохранением (Стрибог-512)
-- Rate limiting: 60 req/min общий, специальные лимиты для login/register
-- Валидация всех входных данных
-- Структурированное логирование в `logs/app.log`
 - JWT токены для аутентификации
+- Rate limiting на всех эндпоинтах
+- Валидация всех входных данных
+- Структурированное логирование
 
 ### Rate Limits
 
@@ -198,6 +301,8 @@ curl -X POST http://localhost:8000/api/crypto/hash \
 
 ## Тестирование алгоритмов
 
+### Общее тестирование
+
 ```bash
 # Все алгоритмы
 python test_algorithms.py --all
@@ -211,32 +316,73 @@ python test_algorithms.py --rsa
 python test_algorithms.py --all --verbose --progress
 ```
 
-## Технологии
+### Генерация и тестирование RSA-32768
 
-- **Backend**: FastAPI, Python 3.10+, PostgreSQL
-- **Frontend**: React, Tailwind CSS
-- **Алгоритмы**: RSA-32768 (GMP), Кузнечик, Стрибог-512
-- **Инфраструктура**: Docker, Nginx
+**ВАЖНО**: Генерация ключей RSA-32768 занимает 9-28 дней на современном CPU.
 
-## Production рекомендации
+```bash
+# Диагностика окружения
+python test_rsa.py --diagnose
 
-- Настроить HTTPS/SSL (Let's Encrypt)
-- Изменить `SECRET_KEY` и `MASTER_KEY` на криптостойкие
-- Настроить connection pooling для БД
-- Добавить мониторинг (Prometheus/Sentry)
-- Завершить интеграцию OAuth
-- Настроить автоматические бэкапы БД
-- Добавить unit/integration тесты
+# Генерация ключей (9-28 дней)
+python test_rsa.py --generate --keys keys.json --rounds 15
+
+# Тестирование с существующими ключами
+python test_rsa.py --test --keys keys.json --iterations 10
+```
+
+#### Важно для M4 Mac
+
+Убедитесь, что gmpy2 скомпилирован для ARM64:
+
+```bash
+python test_rsa.py --diagnose
+
+# Если видите "x86_64" в выводе:
+pip uninstall gmpy2
+pip install --no-binary :all: gmpy2
+```
+
+#### Параметры Miller-Rabin
+
+| Раунды | Время генерации | Безопасность |
+|--------|----------------|--------------|
+| 10 | 6-19 дней | Минимум |
+| **15** (рекомендуется) | **9-28 дней** | **Рекомендуется** |
+| 20 | 12-38 дней | Консервативно |
 
 ## Архитектура
 
-Проект следует принципам **Clean Architecture** с разделением на слои:
-- **Routers** - HTTP эндпоинты
-- **Services** - бизнес-логика
-- **Models** - структура данных
-- **Schemas** - валидация
+Проект следует принципам **Clean Architecture**:
 
-Детали в [ARCHITECTURE.md](ARCHITECTURE.md).
+- **Routers** - HTTP эндпоинты (тонкий слой)
+- **Services** - бизнес-логика (Auth, Crypto, Document)
+- **Models** - ORM модели данных
+- **Schemas** - валидация входных данных
+
+Преимущества:
+
+- Легкое тестирование (сервисы независимы от HTTP)
+- Модульность (каждый сервис отвечает за одну задачу)
+- Расширяемость (добавление новых алгоритмов без изменения существующих)
+
+Детали в [ARCHITECTURE.md](ARCHITECTURE.md)
+
+## Production рекомендации
+
+### Обязательно
+
+1. Настроить HTTPS/SSL (Let's Encrypt)
+2. Изменить `SECRET_KEY` и `MASTER_KEY` на криптостойкие
+3. Настроить автоматические бэкапы БД
+4. Добавить мониторинг (Prometheus/Sentry)
+
+### Рекомендуется
+
+- Настроить connection pooling для БД
+- Завершить интеграцию OAuth
+- Добавить unit/integration тесты
+- Настроить CI/CD pipeline
 
 ## Лицензия
 

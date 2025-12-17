@@ -1,0 +1,79 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Python
+__pycache__
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info
+dist
+build
+*.egg
+.pytest_cache
+.coverage
+htmlcov
+
+# Virtual environments
+venv
+env
+ENV
+.venv
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+logs
+
+# Documentation
+*.md
+!README.md
+docs
+
+# Frontend (не нужно в backend образе)
+frontend/node_modules
+frontend/dist
+frontend/.vite
+
+# Test files
+test_*.py
+*_test.py
+tests
+
+# CI/CD
+.github
+.gitlab-ci.yml
+.travis.yml
+
+# Docker
+docker-compose*.yml
+Dockerfile*
+.dockerignore
+
+# CLI artifacts (не нужны в контейнере)
+cli
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Temporary files
+tmp
+temp
+*.tmp

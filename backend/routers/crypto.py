@@ -1,7 +1,4 @@
-"""
-Роутер криптографических операций
-Тонкий слой HTTP эндпоинтов, вся логика в сервисах
-"""
+"""Роутер криптографических операций"""
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 import logging
@@ -22,7 +19,6 @@ async def encrypt_text(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Шифрование текста с безопасным управлением ключами"""
     try:
         if request.algorithm == "kuznechik":
             kuznechik_service = KuznechikService()
@@ -64,7 +60,6 @@ async def decrypt_text(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Расшифрование текста с использованием сохраненных ключей"""
     try:
         if request.algorithm == "kuznechik":
             if not request.key:
@@ -104,7 +99,6 @@ async def hash_text(
     request: HashRequest,
     user: User = Depends(get_current_user)
 ):
-    """Хеширование текста с использованием Стрибог-512"""
     try:
         hash_service = HashService()
         hash_result = hash_service.hash_text(request.text)
@@ -122,7 +116,6 @@ async def list_keys(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Получение списка RSA ключей пользователя"""
     rsa_service = RSAService()
     keys = rsa_service.list_user_keys(user.id, db)
 
@@ -135,7 +128,6 @@ async def delete_key(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Удаление RSA ключа"""
     try:
         rsa_service = RSAService()
         rsa_service.delete_key(key_id, user.id, db)
