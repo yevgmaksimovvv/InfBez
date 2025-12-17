@@ -224,14 +224,20 @@ infbez crypto hash important.pdf -f --verify "$(cat hash.txt)"
 #### Тестирование алгоритмов
 
 ```bash
-# Все алгоритмы без RSA (RSA требует ключи)
+# Все алгоритмы без RSA (результаты автоматически сохраняются в results/)
 infbez test all --skip-rsa -i 100
 
 # Все алгоритмы включая RSA
-infbez test all --rsa-keys keys.json -i 100 -o results.json
+infbez test all --rsa-keys keys.json -i 100
 
 # С детализацией и прогрессом
 infbez test all --progress -s 1024 -s 4096
+
+# Не сохранять результаты
+infbez test all --no-save
+
+# Кастомный путь сохранения
+infbez test all -o custom_results.json
 ```
 
 ## API примеры
@@ -307,10 +313,12 @@ curl -X POST http://localhost:8000/api/crypto/hash \
 
 Все тесты выполняются через CLI команду `infbez test all`.
 
+**Результаты автоматически сохраняются** в папку `results/` с timestamp'ом.
+
 ### Комплексное тестирование
 
 ```bash
-# Все алгоритмы (без RSA)
+# Все алгоритмы (без RSA) - результаты в results/test_YYYYMMDD_HHMMSS.json
 infbez test all --skip-rsa
 
 # Все алгоритмы включая RSA (требуются ключи)
@@ -320,7 +328,31 @@ infbez test all --rsa-keys keys.json
 infbez test all --progress
 
 # Кастомные параметры
-infbez test all --rsa-keys keys.json -i 100 -s 1024 -s 4096 -o results.json
+infbez test all --rsa-keys keys.json -i 100 -s 1024 -s 4096
+
+# Без сохранения результатов
+infbez test all --no-save
+
+# Кастомный путь сохранения
+infbez test all -o my_benchmark.json
+```
+
+### Структура результатов
+
+```json
+{
+  "timestamp": "2025-01-15T10:30:45Z",
+  "iterations": 10,
+  "data_sizes": [16, 64, 256, 1024, 4096],
+  "results": {
+    "streebog": {
+      "16": {"avg_ms": 0.125, "min_ms": 0.120, "max_ms": 0.135, "std_dev": 0.005},
+      ...
+    },
+    "kuznechik": { ... },
+    "rsa": { ... }
+  }
+}
 ```
 
 ### Генерация RSA-32768 ключей

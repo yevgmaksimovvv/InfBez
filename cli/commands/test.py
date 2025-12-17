@@ -45,7 +45,7 @@ def test_all(
     output: Optional[Path] = typer.Option(
         None,
         "--output", "-o",
-        help="Сохранить результаты в JSON"
+        help="Кастомный путь для сохранения результатов (по умолчанию: results/test_TIMESTAMP.json)"
     ),
     show_progress: bool = typer.Option(
         True,
@@ -62,9 +62,16 @@ def test_all(
         "--rsa-keys",
         help="Путь к RSA ключам (если не указан, RSA будет пропущен)"
     ),
+    no_save: bool = typer.Option(
+        False,
+        "--no-save",
+        help="Не сохранять результаты в файл"
+    ),
 ):
     """
     Комплексное тестирование всех алгоритмов по очереди
+
+    Результаты автоматически сохраняются в папку results/
 
     Примеры:
 
@@ -79,6 +86,12 @@ def test_all(
 
       # Кастомные размеры данных
       infbez test all -s 1024 -s 4096 -s 8192
+
+      # Не сохранять результаты
+      infbez test all --no-save
+
+      # Кастомный путь сохранения
+      infbez test all -o my_results/custom.json
     """
     try:
         # Размеры данных
@@ -136,9 +149,26 @@ def test_all(
         display_all_results(results)
 
         # Сохранение результатов
-        if output:
-            save_json_file(results, output)
-            print_success(f"\nРезультаты сохранены в {output}")
+        if not no_save:
+            # Определение пути для сохранения
+            if output:
+                output_path = output
+            else:
+                # Создание папки results если не существует
+                results_dir = Path("results")
+                results_dir.mkdir(exist_ok=True)
+
+                # Генерация имени файла с timestamp
+                from datetime import datetime
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                output_path = results_dir / f"test_{timestamp}.json"
+
+            # Сохранение
+            save_json_file(results, output_path)
+            print_success(f"\n✓ Результаты сохранены в {output_path}")
+            print_info(f"  Файл: {output_path.absolute()}")
+        else:
+            print_info("\nРезультаты не сохранены (--no-save)")
 
     except KeyboardInterrupt:
         print_error("\nТестирование прервано")
