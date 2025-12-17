@@ -167,8 +167,8 @@ infbez crypto encrypt "Секретное сообщение" -a kuznechik
 # Хеширование файла
 infbez crypto hash document.pdf -f
 
-# Бенчмарк алгоритмов
-infbez test benchmark --progress
+# Комплексное тестирование всех алгоритмов
+infbez test all --progress
 
 # Запуск сервера
 infbez server start --reload
@@ -191,10 +191,7 @@ infbez server start --reload
 
 #### test - Тестирование и бенчмарки
 
-- `benchmark` - Комплексный бенчмарк
-- `streebog` - Тест Стрибог
-- `kuznechik` - Тест Кузнечик
-- `rsa` - Тест RSA
+- `all` - Комплексное тестирование всех алгоритмов
 
 #### server - Управление backend
 
@@ -224,10 +221,17 @@ infbez crypto hash important.pdf -f > hash.txt
 infbez crypto hash important.pdf -f --verify "$(cat hash.txt)"
 ```
 
-#### Бенчмарк алгоритмов
+#### Тестирование алгоритмов
 
 ```bash
-infbez test benchmark -s 1024 -i 100 -o results.json
+# Все алгоритмы без RSA (RSA требует ключи)
+infbez test all --skip-rsa -i 100
+
+# Все алгоритмы включая RSA
+infbez test all --rsa-keys keys.json -i 100 -o results.json
+
+# С детализацией и прогрессом
+infbez test all --progress -s 1024 -s 4096
 ```
 
 ## API примеры
@@ -301,55 +305,35 @@ curl -X POST http://localhost:8000/api/crypto/hash \
 
 ## Тестирование алгоритмов
 
-### Общее тестирование
+Все тесты выполняются через CLI команду `infbez test all`.
+
+### Комплексное тестирование
 
 ```bash
-# Все алгоритмы
-python test_algorithms.py --all
+# Все алгоритмы (без RSA)
+infbez test all --skip-rsa
 
-# Конкретный алгоритм
-python test_algorithms.py --streebog
-python test_algorithms.py --kuznechik
-python test_algorithms.py --rsa
+# Все алгоритмы включая RSA (требуются ключи)
+infbez test all --rsa-keys keys.json
 
-# С детализацией
-python test_algorithms.py --all --verbose --progress
+# С прогресс-баром
+infbez test all --progress
+
+# Кастомные параметры
+infbez test all --rsa-keys keys.json -i 100 -s 1024 -s 4096 -o results.json
 ```
 
-### Генерация и тестирование RSA-32768
+### Генерация RSA-32768 ключей
 
 **ВАЖНО**: Генерация ключей RSA-32768 занимает 9-28 дней на современном CPU.
 
 ```bash
-# Диагностика окружения
-python test_rsa.py --diagnose
-
 # Генерация ключей (9-28 дней)
-python test_rsa.py --generate --keys keys.json --rounds 15
+infbez keys generate --output keys.json
 
-# Тестирование с существующими ключами
-python test_rsa.py --test --keys keys.json --iterations 10
+# После генерации можно использовать для тестирования
+infbez test all --rsa-keys keys.json
 ```
-
-#### Важно для M4 Mac
-
-Убедитесь, что gmpy2 скомпилирован для ARM64:
-
-```bash
-python test_rsa.py --diagnose
-
-# Если видите "x86_64" в выводе:
-pip uninstall gmpy2
-pip install --no-binary :all: gmpy2
-```
-
-#### Параметры Miller-Rabin
-
-| Раунды | Время генерации | Безопасность |
-|--------|----------------|--------------|
-| 10 | 6-19 дней | Минимум |
-| **15** (рекомендуется) | **9-28 дней** | **Рекомендуется** |
-| 20 | 12-38 дней | Консервативно |
 
 ## Архитектура
 
