@@ -125,36 +125,43 @@ def create_progress() -> Progress:
     )
 
 
-def read_file_or_text(input_str: str, is_file: bool) -> bytes:
-    """Чтение данных из файла или текста"""
-    if is_file:
+def read_input_data(input_str: str, force_file: bool = False, force_text: bool = False) -> bytes:
+    """
+    Чтение данных с явным контролем источника
+
+    Args:
+        input_str: Строка или путь к файлу
+        force_file: Принудительно читать как файл
+        force_text: Принудительно читать как текст
+
+    Returns:
+        Данные в байтах
+
+    Raises:
+        FileNotFoundError: Если файл не найден при force_file=True
+        ValueError: Если указаны оба флага одновременно
+    """
+    if force_file and force_text:
+        raise ValueError("Нельзя указать --file и --text одновременно")
+
+    if force_file:
+        # Принудительно читаем как файл
         file_path = Path(input_str)
         if not file_path.exists():
             raise FileNotFoundError(f"Файл не найден: {file_path}")
         with open(file_path, 'rb') as f:
             return f.read()
-    else:
+    elif force_text:
+        # Принудительно читаем как текст
         return input_str.encode('utf-8')
-
-
-def write_output(data: Any, output_path: Optional[Path], as_json: bool = False) -> None:
-    """Запись результата в файл или stdout"""
-    if output_path:
-        if as_json:
-            save_json_file(data, output_path)
-            print_success(f"Результат сохранен в {output_path}")
-        else:
-            with open(output_path, 'w', encoding='utf-8') as f:
-                if isinstance(data, dict):
-                    json.dump(data, f, indent=2, ensure_ascii=False)
-                else:
-                    f.write(str(data))
-            print_success(f"Результат сохранен в {output_path}")
     else:
-        if as_json or isinstance(data, dict):
-            print_json(data)
+        # Автоопределение: проверяем существование файла
+        file_path = Path(input_str)
+        if file_path.exists():
+            with open(file_path, 'rb') as f:
+                return f.read()
         else:
-            console.print(data)
+            return input_str.encode('utf-8')
 
 
 def format_bytes(size: int) -> str:

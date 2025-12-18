@@ -55,7 +55,15 @@ setup(
     },
     entry_points={
         "console_scripts": [
-            "infbez=cli.main:app",
+            # Команды по алгоритмам
+            "kuznechik=cli.commands.kuznechik:app",
+            "rsa=cli.commands.rsa:app",
+            "streebog=cli.commands.streebog:app",
+
+            # Универсальные команды (быстрые алиасы)
+            "encrypt=cli.commands.universal:encrypt_universal",
+            "decrypt=cli.commands.universal:decrypt_universal",
+            "hash=cli.commands.universal:hash_universal",
         ],
     },
     include_package_data=True,

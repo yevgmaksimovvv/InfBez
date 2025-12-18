@@ -2,6 +2,24 @@
 
 Веб-приложение для криптографических операций с ГОСТ алгоритмами и многофакторной аутентификацией.
 
+## Содержание
+
+- [Возможности](#возможности)
+- [Технологии](#технологии)
+- [Быстрый старт](#быстрый-старт)
+  - [Web-приложение (Docker)](#запуск-сервера-через-docker-compose-рекомендуется)
+  - [CLI интерфейс](#cli---интерфейс-командной-строки)
+- [Структура проекта](#структура-проекта)
+- [CLI - Интерфейс командной строки](#cli---интерфейс-командной-строки)
+  - [Команды Кузнечик](#kuznechik---шифрование-кузнечик-гост-р-341122018)
+  - [Команды RSA](#rsa---rsa-32768)
+  - [Команды Стрибог](#streebog---хеширование-стрибог-512-гост-34112018)
+- [API примеры](#api-примеры)
+- [Безопасность](#безопасность)
+- [Генерация RSA-32768 ключей](#генерация-rsa-32768-ключей)
+- [Архитектура](#архитектура)
+- [Production рекомендации](#production-рекомендации)
+
 ## Возможности
 
 - **Шифрование**: RSA-32768, Кузнечик (ГОСТ Р 34.12-2018)
@@ -10,6 +28,24 @@
 - **Интерфейсы**: Web UI + CLI
 - **Безопасность**: Rate limiting, шифрование ключей, валидация данных
 - **Роли**: Гость, Пользователь, Администратор
+
+### Быстрые примеры CLI
+
+```bash
+# Установка CLI
+pip install -e .
+
+# Шифрование
+kuznechik encrypt "Секретное сообщение"
+encrypt document.txt -o encrypted.json
+
+# Хеширование
+streebog hash important.pdf
+
+# RSA ключи
+rsa keygen -o my_keys.json
+rsa keys  # Показать все ключи
+```
 
 ## Технологии
 
@@ -37,11 +73,22 @@ brew install gmp
 sudo apt-get install libgmp-dev
 ```
 
-### Запуск через Docker (рекомендуется)
+### Запуск сервера через Docker Compose (рекомендуется)
+
+Backend сервер запускается **только через Docker Compose**:
 
 ```bash
-# Запуск всех сервисов
+# Запуск всех сервисов (PostgreSQL, Redis, Backend, Frontend)
 docker-compose up --build
+
+# Или в фоновом режиме
+docker-compose up -d --build
+
+# Остановка
+docker-compose down
+
+# Просмотр логов
+docker-compose logs -f backend
 ```
 
 Приложение доступно:
@@ -49,6 +96,8 @@ docker-compose up --build
 - Frontend: <http://localhost:80>
 - Backend API: <http://localhost:8000>
 - API Docs: <http://localhost:8000/docs>
+- PostgreSQL: <http://localhost:5432>
+- Redis: <http://localhost:6379>
 
 ### Локальный запуск
 
@@ -103,9 +152,11 @@ InfBez/
 │   ├── streebog/       # Стрибог-512 (ГОСТ 34.11-2018)
 │   └── rsa_32768.py    # RSA-32768 (GMP)
 ├── cli/                 # Интерфейс командной строки
-│   ├── main.py         # Точка входа CLI
+│   ├── commands/       # Команды (kuznechik, rsa, streebog, universal)
+│   ├── services/       # Бизнес-логика криптографии
 │   ├── utils.py        # Утилиты (Rich, форматирование)
-│   └── commands/       # Команды (crypto, keys, test, server)
+│   └── exit_codes.py   # Коды возврата для CLI
+├── results/             # Выходные файлы (ключи, зашифрованные данные)
 ├── requirements.txt     # Централизованные зависимости
 ├── requirements-dev.txt # Зависимости для разработки
 ├── setup.py            # Установка CLI пакета
@@ -152,92 +203,157 @@ pip install -e ".[dev]"       # с dev инструментами
 pip install -e .
 
 # Проверка установки
-infbez --version
+kuznechik --help
+rsa --help
+streebog --help
+encrypt --help
 ```
 
 ### Основные команды
 
-```bash
-# Помощь
-infbez --help
+CLI использует **прямые команды без префикса**, что делает их короче и удобнее:
 
+```bash
 # Шифрование Кузнечик
-infbez crypto encrypt "Секретное сообщение" -a kuznechik
+kuznechik encrypt "Секретное сообщение"
 
 # Хеширование файла
-infbez crypto hash document.pdf -f
+streebog hash document.pdf
 
-# Комплексное тестирование всех алгоритмов
-infbez test all --progress
+# Генерация RSA ключей
+rsa keygen -o my_keys.json
 
-# Запуск сервера
-infbez server start --reload
+# Универсальные команды
+encrypt "text"
+hash "data"
 ```
 
-### Команды CLI
+### Структура команд
 
-#### crypto - Криптографические операции
+#### kuznechik - Шифрование Кузнечик (ГОСТ Р 34.12-2018)
 
-- `encrypt` - Шифрование (Кузнечик, RSA)
-- `decrypt` - Расшифрование
-- `hash` - Хеширование (Стрибог-512)
+```bash
+kuznechik encrypt <text|file> [-o output]
+kuznechik decrypt <file> [-o output] [--key keyfile]
+```
 
-#### keys - Управление RSA ключами
+#### rsa - RSA-32768
 
-- `generate` - Генерация RSA-32768 ключей
-- `list` - Список ключей
-- `export` - Экспорт публичного ключа
-- `import` - Импорт ключа
+```bash
+rsa encrypt <text|file> --key <pubkey> [-o output]
+rsa decrypt <file> --key <privkey> [-o output]
+rsa keygen [-o output] [--name name]
+rsa keys [--directory dir]
+rsa export <keyfile> [-o output] [--public]
+rsa import <keyfile> [-o output]
+```
 
-#### test - Тестирование и бенчмарки
+#### streebog - Хеширование Стрибог-512 (ГОСТ 34.11-2018)
 
-- `all` - Комплексное тестирование всех алгоритмов
+```bash
+streebog hash <text|file> [--hex/--base64]
+streebog verify <file> <hash>
+```
 
-#### server - Управление backend
+#### Универсальные команды (короткие алиасы)
 
-- `start` - Запуск сервера
-- `init` - Инициализация БД
-- `config` - Показать конфигурацию
+```bash
+encrypt <text|file>     # Использует Кузнечик
+decrypt <file>          # Автоопределение алгоритма
+```
+
+**Примечание**: Команда `hash` зарегистрирована, но может конфликтовать с bash builtin. Используйте `streebog hash` для хеширования.
 
 ### Примеры использования
 
-#### Быстрое шифрование
+#### Быстрое шифрование Кузнечик
 
 ```bash
+# Шифрование текста
+kuznechik encrypt "Секретное сообщение"
+
+# Шифрование файла
+kuznechik encrypt document.txt -o encrypted.json
+
+# Расшифрование (ключ автоматически берется из файла)
+kuznechik decrypt encrypted.json
+
+# Расшифрование с выводом в файл
+kuznechik decrypt encrypted.json -o decrypted.txt
+```
+
+#### RSA-32768 шифрование
+
+```bash
+# Генерация ключей (демо режим)
+rsa keygen -o my_keys.json --name "My Key"
+
+# Список ключей
+rsa keys
+
+# Экспорт публичного ключа
+rsa export my_keys.json -o public.json
+
 # Шифрование
-infbez crypto encrypt "Секретное сообщение" -a kuznechik -o msg.json
+rsa encrypt "Secret" --key public.json -o encrypted.json
 
 # Расшифрование
-infbez crypto decrypt msg.json -a kuznechik -k msg.json -f
+rsa decrypt encrypted.json --key my_keys.json
 ```
 
 #### Проверка целостности файла
 
 ```bash
 # Создание хеша
-infbez crypto hash important.pdf -f > hash.txt
+streebog hash important.pdf
 
-# Проверка
-infbez crypto hash important.pdf -f --verify "$(cat hash.txt)"
+# Проверка хеша
+streebog verify important.pdf "9a8b7c6d..."
+
+# Хеш в base64
+streebog hash file.txt --base64
 ```
 
-#### Тестирование алгоритмов
+### Дополнительные возможности CLI
+
+#### Общие опции
+
+Все команды поддерживают:
+- `--force` / `-f` - Перезапись существующих файлов без подтверждения
+- `-o` / `--output` - Указание пути для выходного файла
+- `-h` / `--help` - Справка по команде
 
 ```bash
-# Все алгоритмы без RSA (результаты автоматически сохраняются в results/)
-infbez test all --skip-rsa -i 100
+# Перезапись файла
+kuznechik encrypt "text" -o result.json --force
 
-# Все алгоритмы включая RSA
-infbez test all --rsa-keys keys.json -i 100
+# Справка
+rsa keygen --help
+```
 
-# С детализацией и прогрессом
-infbez test all --progress -s 1024 -s 4096
+#### Коды возврата
 
-# Не сохранять результаты
-infbez test all --no-save
+CLI использует стандартизированные коды возврата ([cli/exit_codes.py](cli/exit_codes.py)):
 
-# Кастомный путь сохранения
-infbez test all -o custom_results.json
+- `0` - Успешное выполнение
+- `1` - Общая ошибка
+- `2` - Ошибка чтения файла
+- `3` - Ошибка записи файла
+- `10` - Ошибка шифрования
+- `11` - Ошибка расшифрования
+- `12` - Ошибка хеширования
+- `20` - Невалидный ключ
+- `30` - Данные слишком большие
+
+Это позволяет использовать CLI в скриптах с надежной обработкой ошибок.
+
+```bash
+# Пример использования в скриптах
+if kuznechik encrypt "data" -o output.json; then
+    echo "Шифрование успешно"
+else
+    echo "Ошибка: код $?"
+fi
 ```
 
 ## API примеры
@@ -309,78 +425,102 @@ curl -X POST http://localhost:8000/api/crypto/hash \
 - Кузнечик: максимум 1MB
 - Общий лимит: 100KB
 
-## Тестирование алгоритмов
+## Генерация RSA-32768 ключей
 
-Все тесты выполняются через CLI команду `infbez test all`.
+**ВАЖНО**: Генерация ключей RSA-32768 занимает 5-20 дней на современном CPU.
 
-**Результаты автоматически сохраняются** в папку `results/` с timestamp'ом.
-
-### Комплексное тестирование
+Проект включает полную реализацию генерации ключей с параллелизацией:
 
 ```bash
-# Все алгоритмы (без RSA) - результаты в results/test_YYYYMMDD_HHMMSS.json
-infbez test all --skip-rsa
+# Генерация RSA-32768 ключей (займет несколько дней!)
+rsa keygen -o keys.json --name "Production Key"
 
-# Все алгоритмы включая RSA (требуются ключи)
-infbez test all --rsa-keys keys.json
+# Генерация с кастомными параметрами
+rsa keygen -o keys.json --rounds 20 --no-parallel
 
-# С прогресс-баром
-infbez test all --progress
+# Список ключей (ищет в ./keys и текущей директории)
+rsa keys
 
-# Кастомные параметры
-infbez test all --rsa-keys keys.json -i 100 -s 1024 -s 4096
+# Список ключей в конкретной директории
+rsa keys -d ./my_keys
 
-# Без сохранения результатов
-infbez test all --no-save
-
-# Кастомный путь сохранения
-infbez test all -o my_benchmark.json
+# Процесс генерации:
+# - Параллельная генерация простых чисел p и q (16384 бит каждое)
+# - Miller-Rabin тест простоты (15 раундов по умолчанию)
+# - Логирование прогресса каждые 30 секунд
+# - Полная статистика по завершении
 ```
 
-### Структура результатов
+### Хранение результатов
+
+По умолчанию все результаты криптографических операций сохраняются:
+- **Зашифрованные данные**: `encrypted.json` (или указанный через `-o` путь)
+- **RSA ключи**: `rsa_keys.json` (можно указать кастомное имя)
+- **Рекомендуемая директория**: [results/](results/) - создана для хранения всех выходных файлов
+
+#### Формат выходных файлов
+
+Все результаты сохраняются в JSON с метаданными:
 
 ```json
 {
-  "timestamp": "2025-01-15T10:30:45Z",
-  "iterations": 10,
-  "data_sizes": [16, 64, 256, 1024, 4096],
-  "results": {
-    "streebog": {
-      "16": {"avg_ms": 0.125, "min_ms": 0.120, "max_ms": 0.135, "std_dev": 0.005},
-      ...
-    },
-    "kuznechik": { ... },
-    "rsa": { ... }
-  }
+  "encrypted": "base64_encrypted_data",
+  "key": "base64_key",
+  "algorithm": "kuznechik",
+  "encoding": "base64",
+  "original_size": 1024,
+  "encrypted_size": 1040,
+  "timestamp": "2025-12-18T10:00:00Z"
 }
 ```
 
-### Генерация RSA-32768 ключей
+Это обеспечивает:
+- Самодостаточность файлов (ключ включен)
+- Прозрачность (видны размеры и алгоритм)
+- Отслеживаемость (timestamp для аудита)
 
-**ВАЖНО**: Генерация ключей RSA-32768 занимает 9-28 дней на современном CPU.
-
-```bash
-# Генерация ключей (9-28 дней)
-infbez keys generate --output keys.json
-
-# После генерации можно использовать для тестирования
-infbez test all --rsa-keys keys.json
-```
+Для тестирования и разработки используйте готовые ключи или RSA с меньшим размером.
 
 ## Архитектура
 
-Проект следует принципам **Clean Architecture**:
+Проект следует принципам **Clean Architecture** и **Separation of Concerns**:
+
+### Backend архитектура
 
 - **Routers** - HTTP эндпоинты (тонкий слой)
 - **Services** - бизнес-логика (Auth, Crypto, Document)
 - **Models** - ORM модели данных
 - **Schemas** - валидация входных данных
 
+### CLI архитектура
+
+CLI построен на модульной архитектуре с разделением ответственности:
+
+```text
+cli/
+├── commands/              # Обработчики команд (UI слой)
+│   ├── kuznechik.py      # Команды Кузнечик
+│   ├── rsa.py            # Команды RSA
+│   ├── streebog.py       # Команды Стрибог
+│   └── universal.py      # Универсальные алиасы
+├── services/             # Бизнес-логика (без зависимости от CLI)
+│   └── crypto_service.py # KuznechikService, RSAService, StreebogService
+├── utils.py              # Утилиты (Rich форматирование, I/O)
+└── exit_codes.py         # Стандартизированные коды возврата
+```
+
+**Ключевые принципы:**
+- **Commands** - только CLI интерфейс (парсинг аргументов, вывод)
+- **Services** - чистая бизнес-логика (можно переиспользовать)
+- **Утилиты** - общие функции (форматирование, файловый I/O)
+- **Exit codes** - явные коды ошибок для скриптов
+
 Преимущества:
 
-- Легкое тестирование (сервисы независимы от HTTP)
+- Легкое тестирование (сервисы независимы от CLI)
 - Модульность (каждый сервис отвечает за одну задачу)
 - Расширяемость (добавление новых алгоритмов без изменения существующих)
+- Переиспользование (CLI и Backend используют одни алгоритмы)
 
 Детали в [ARCHITECTURE.md](ARCHITECTURE.md)
 
