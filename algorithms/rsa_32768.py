@@ -510,7 +510,9 @@ class RSA32768:
             raise ValueError("Сообщение слишком велико для модуля n")
 
         c = gmpy2.powmod(m, self.keypair.e, self.keypair.n)
-        return c.to_bytes(4096, byteorder='big')
+        # Конвертация большого mpz в bytes через int
+        c_int = int(c)
+        return c_int.to_bytes(4096, byteorder='big')
 
     def decrypt(self, ciphertext: bytes) -> bytes:
         if len(ciphertext) != 4096:
@@ -518,7 +520,9 @@ class RSA32768:
 
         c = mpz(int.from_bytes(ciphertext, byteorder='big'))
         m = gmpy2.powmod(c, self.keypair.d, self.keypair.n)
-        m_bytes = m.to_bytes(4096, byteorder='big')
+        # Конвертация большого mpz в bytes через int
+        m_int = int(m)
+        m_bytes = m_int.to_bytes(4096, byteorder='big')
         pad_len = (m_bytes[2] * 256) + m_bytes[3]
         return bytes(m_bytes[pad_len:])
 

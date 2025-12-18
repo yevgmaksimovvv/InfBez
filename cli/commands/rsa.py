@@ -2,11 +2,15 @@
 Команды для RSA-32768 шифрования и управления ключами
 """
 
+import sys
 import typer
 from pathlib import Path
 from typing import Optional
 import uuid
 from datetime import datetime
+
+# Увеличение лимита конвертации int для RSA-32768
+sys.set_int_max_str_digits(20000)
 
 from cli.utils import (
     console, print_success, print_error, print_warning, print_info,
@@ -76,8 +80,17 @@ def encrypt(
 
         # Загрузка публичного ключа
         key_data = load_json_file(key)
+        n_str = key_data['public_key']['n']
+        # Поддержка hex и decimal форматов
+        if isinstance(n_str, str) and n_str.startswith(('0x', '0X')):
+            n_value = int(n_str, 16)
+        elif isinstance(n_str, str):
+            n_value = int(n_str)
+        else:
+            n_value = n_str
+
         public_key = {
-            'n': int(key_data['public_key']['n'], 16),
+            'n': n_value,
             'e': key_data['public_key']['e']
         }
 
@@ -157,14 +170,23 @@ def decrypt(
 
         # Загрузка ключей
         key_data = load_json_file(key)
+
+        # Поддержка hex и decimal форматов
+        def parse_key_value(val):
+            if isinstance(val, str) and val.startswith(('0x', '0X')):
+                return int(val, 16)
+            elif isinstance(val, str):
+                return int(val)
+            return val
+
         public_key = {
-            'n': int(key_data['public_key']['n'], 16),
+            'n': parse_key_value(key_data['public_key']['n']),
             'e': key_data['public_key']['e']
         }
         private_key = {
-            'd': int(key_data['private_key']['d'], 16),
-            'p': int(key_data['private_key']['p'], 16),
-            'q': int(key_data['private_key']['q'], 16)
+            'd': parse_key_value(key_data['private_key']['d']),
+            'p': parse_key_value(key_data['private_key']['p']),
+            'q': parse_key_value(key_data['private_key']['q'])
         }
 
         # Расшифрование
